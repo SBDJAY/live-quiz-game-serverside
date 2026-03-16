@@ -1,82 +1,234 @@
 <!DOCTYPE html>
 <html>
-
 <head>
+<title>Live Quiz Game</title>
 
-    <title>WebSocket Chat</title>
+<style>
+
+body{
+    font-family: Arial, Helvetica, sans-serif;
+    background:#f2f4f8;
+    display:flex;
+    justify-content:center;
+    align-items:center;
+    height:100vh;
+    margin:0;
+}
+
+#app{
+    width:400px;
+    background:white;
+    border-radius:10px;
+    padding:25px;
+    box-shadow:0 10px 25px rgba(0,0,0,0.1);
+}
+
+h1{
+    text-align:center;
+}
+
+button{
+    width:100%;
+    padding:12px;
+    margin-top:10px;
+    border:none;
+    border-radius:6px;
+    font-size:16px;
+    cursor:pointer;
+}
+
+.option{
+    background:#f1f3f6;
+}
+
+.option:hover{
+    background:#dfe6f0;
+}
+
+#startBtn{
+    background:#4CAF50;
+    color:white;
+}
+
+#leaderboard{
+    margin-top:20px;
+}
+
+.player{
+    display:flex;
+    justify-content:space-between;
+    padding:8px;
+    background:#f5f5f5;
+    border-radius:6px;
+    margin-top:5px;
+}
+
+#timer{
+    text-align:center;
+    font-size:20px;
+    font-weight:bold;
+    margin-bottom:10px;
+}
+
+</style>
 
 </head>
 
 <body>
 
-    <h1>WebSocket Chat</h1>
+<div id="app">
 
-    <div id="messages"></div>
+<h1>Live Quiz</h1>
 
-    <input id="messageInput" type="text">
+<div id="joinScreen">
 
-    <button id="sendButton">Send</button>
+<input id="username" placeholder="Enter username" style="width:100%;padding:10px;">
+<button id="joinBtn">Join Game</button>
 
-    <script>
+</div>
 
-        const socket = new WebSocket('ws://localhost:8080');
 
-        socket.onopen = function () {
+<div id="quizScreen" style="display:none">
 
-            console.log("Connected");
+<div id="timer">10</div>
 
-        };
+<h2 id="question"></h2>
 
-        socket.onmessage = function (event) {
+<div id="options"></div>
 
-            const messagesDiv = document.getElementById("messages");
+<button id="startBtn">Start Quiz</button>
 
-            if (event.data instanceof Blob) {
+</div>
 
-                event.data.text().then(text => {
 
-                    messagesDiv.innerHTML += `<p>${text}</p>`;
+<div id="leaderboard" style="display:none">
 
-                });
+<h2>Leaderboard</h2>
+<div id="scores"></div>
 
-            } else {
+</div>
 
-                messagesDiv.innerHTML += `<p>${event.data}</p>`;
+</div>
 
-            }
+<script>
 
-        };
+const socket = new WebSocket("ws://localhost:8080");
 
-        socket.onerror = function (error) {
+let userId = Math.random().toString(36).substring(7);
 
-            console.log(error);
+const joinBtn = document.getElementById("joinBtn");
+const startBtn = document.getElementById("startBtn");
 
-        };
+const joinScreen = document.getElementById("joinScreen");
+const quizScreen = document.getElementById("quizScreen");
 
-        socket.onclose = function () {
+const questionEl = document.getElementById("question");
+const optionsEl = document.getElementById("options");
+const timerEl = document.getElementById("timer");
 
-            console.log("Disconnected");
+const leaderboard = document.getElementById("leaderboard");
+const scoresDiv = document.getElementById("scores");
 
-        };
 
-        const sendButton = document.getElementById("sendButton");
+socket.onopen = () => {
+    console.log("Connected to server");
+};
 
-        sendButton.onclick = function () {
 
-            const input = document.getElementById("messageInput");
+joinBtn.onclick = () => {
 
-            const message = input.value;
+    const username = document.getElementById("username").value;
 
-            socket.send(message);
+    socket.send(JSON.stringify({
+        type:"join",
+        userId:userId,
+        username:username
+    }));
 
-            messagesDiv.innerHTML += `<p>You: ${message}</p>`;
+    joinScreen.style.display="none";
+    quizScreen.style.display="block";
+};
 
-            input.value = "";
 
-        };
+startBtn.onclick = () => {
 
-    </script>
+    socket.send(JSON.stringify({
+        type:"start"
+    }));
+
+};
+
+
+socket.onmessage = (event) => {
+
+    const data = JSON.parse(event.data);
+
+    console.log(data);
+
+    if(data.type === "question"){
+
+        questionEl.innerText = data.question;
+
+        optionsEl.innerHTML="";
+
+        data.options.forEach((option,index)=>{
+
+            const btn = document.createElement("button");
+
+            btn.className="option";
+
+            btn.innerText=option;
+
+            btn.onclick=()=>{
+
+                socket.send(JSON.stringify({
+                    type:"answer",
+                    userId:userId,
+                    answer:index
+                }));
+
+            };
+
+            optionsEl.appendChild(btn);
+
+        });
+
+    }
+
+    if(data.type === "timer"){
+
+        timerEl.innerText = "Time: " + data.value;
+
+    }
+
+
+    if(data.type === "end"){
+
+        quizScreen.style.display="none";
+        leaderboard.style.display="block";
+
+        scoresDiv.innerHTML="";
+
+        for(const id in data.scores){
+
+            const div = document.createElement("div");
+
+            div.className="player";
+
+            div.innerHTML = `
+                <span>${id}</span>
+                <span>${data.scores[id]}</span>
+            `;
+
+            scoresDiv.appendChild(div);
+
+        }
+
+    }
+
+};
+
+</script>
 
 </body>
-
 </html>
