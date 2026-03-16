@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+
+    <title>WebSocket Chat</title>
+
+</head>
+
+<body>
+
+    <h1>WebSocket Chat</h1>
+
+    <div id="messages"></div>
+
+    <input id="messageInput" type="text">
+
+    <button id="sendButton">Send</button>
+
+    <script>
+
+        const socket = new WebSocket('ws://localhost:8080');
+
+        socket.onopen = function () {
+
+            console.log("Connected");
+
+        };
+
+        socket.onmessage = function (event) {
+
+            const messagesDiv = document.getElementById("messages");
+
+            if (event.data instanceof Blob) {
+
+                event.data.text().then(text => {
+
+                    messagesDiv.innerHTML += `<p>${text}</p>`;
+
+                });
+
+            } else {
+
+                messagesDiv.innerHTML += `<p>${event.data}</p>`;
+
+            }
+
+        };
+
+        socket.onerror = function (error) {
+
+            console.log(error);
+
+        };
+
+        socket.onclose = function () {
+
+            console.log("Disconnected");
+
+        };
+
+        const sendButton = document.getElementById("sendButton");
+
+        sendButton.onclick = function () {
+
+            const input = document.getElementById("messageInput");
+
+            const message = input.value;
+
+            socket.send(message);
+
+            messagesDiv.innerHTML += `<p>You: ${message}</p>`;
+
+            input.value = "";
+
+        };
+
+    </script>
+
+</body>
+
+</html>
