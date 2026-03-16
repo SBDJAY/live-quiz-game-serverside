@@ -116,6 +116,8 @@ const socket = new WebSocket("ws://localhost:8080");
 
 let userId = Math.random().toString(36).substring(7);
 
+const usernameMap = {};
+
 const joinBtn = document.getElementById("joinBtn");
 const startBtn = document.getElementById("startBtn");
 
@@ -138,6 +140,10 @@ socket.onopen = () => {
 joinBtn.onclick = () => {
 
     const username = document.getElementById("username").value;
+
+    if(username.length === 0) return;
+
+    usernameMap[userId] = username;
 
     socket.send(JSON.stringify({
         type:"join",
@@ -164,6 +170,10 @@ socket.onmessage = (event) => {
     const data = JSON.parse(event.data);
 
     console.log(data);
+
+    if(data.type === "players"){
+        Object.assign(usernameMap, data.players);
+    }
 
     if(data.type === "question"){
 
@@ -209,21 +219,30 @@ socket.onmessage = (event) => {
 
         scoresDiv.innerHTML="";
 
-        for(const id in data.scores){
+        /* Convert scores to array so we can sort */
+        const sorted = Object.entries(data.scores)
+            .sort((a,b)=> b[1]-a[1]);
+
+        sorted.forEach((player,index)=>{
+
+            const id = player[0];
+            const score = player[1];
+
+            const username = usernameMap[id] || id;
 
             const div = document.createElement("div");
 
             div.className="player";
 
             div.innerHTML = `
-                <span>${id}</span>
-                <span>${data.scores[id]}</span>
+                <span class="rank">#${index+1}</span>
+                <span>${username}</span>
+                <span>${score}</span>
             `;
 
             scoresDiv.appendChild(div);
 
-        }
-
+        });
     }
 
 };
