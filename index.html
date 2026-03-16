@@ -1,253 +1,288 @@
 <!DOCTYPE html>
 <html>
+
 <head>
-<title>Live Quiz Game</title>
+    <title>Live Quiz Game</title>
 
-<style>
+    <style>
+        body {
+            font-family: Arial, Helvetica, sans-serif;
+            background: #f2f4f8;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+        }
 
-body{
-    font-family: Arial, Helvetica, sans-serif;
-    background:#f2f4f8;
-    display:flex;
-    justify-content:center;
-    align-items:center;
-    height:100vh;
-    margin:0;
-}
+        #app {
+            width: 400px;
+            background: white;
+            border-radius: 10px;
+            padding: 25px;
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1);
+        }
 
-#app{
-    width:400px;
-    background:white;
-    border-radius:10px;
-    padding:25px;
-    box-shadow:0 10px 25px rgba(0,0,0,0.1);
-}
+        h1 {
+            text-align: center;
+        }
 
-h1{
-    text-align:center;
-}
+        button {
+            width: 100%;
+            padding: 12px;
+            margin-top: 10px;
+            border: none;
+            border-radius: 6px;
+            font-size: 16px;
+            cursor: pointer;
+        }
 
-button{
-    width:100%;
-    padding:12px;
-    margin-top:10px;
-    border:none;
-    border-radius:6px;
-    font-size:16px;
-    cursor:pointer;
-}
+        .option {
+            background: #f1f3f6;
+        }
 
-.option{
-    background:#f1f3f6;
-}
+        .option:hover {
+            background: #dfe6f0;
+        }
 
-.option:hover{
-    background:#dfe6f0;
-}
+        #startBtn {
+            background: #4CAF50;
+            color: white;
+        }
 
-#startBtn{
-    background:#4CAF50;
-    color:white;
-}
+        #timer {
+            text-align: center;
+            font-size: 20px;
+            font-weight: bold;
+            margin-bottom: 10px;
+        }
 
-#leaderboard{
-    margin-top:20px;
-}
+        /* FIXED LEADERBOARD */
 
-.player{
-    display:flex;
-    justify-content:space-between;
-    padding:8px;
-    background:#f5f5f5;
-    border-radius:6px;
-    margin-top:5px;
-}
+        #leaderboard {
+            margin-top: 20px;
+        }
 
-#timer{
-    text-align:center;
-    font-size:20px;
-    font-weight:bold;
-    margin-bottom:10px;
-}
+        #scores {
+            max-height: 250px;
+            overflow-y: auto;
+            padding-right: 5px;
+        }
 
-</style>
+        .player {
+            display: flex;
+            justify-content: space-between;
+            padding: 10px;
+            background: #f5f5f5;
+            border-radius: 6px;
+            margin-top: 6px;
+            font-weight: bold;
+        }
+    </style>
 
 </head>
 
 <body>
 
-<div id="app">
+    <div id="app">
 
-<h1>Live Quiz</h1>
+        <h1>Live Quiz</h1>
 
-<div id="joinScreen">
+        <div id="joinScreen">
 
-<input id="username" placeholder="Enter username" style="width:100%;padding:10px;">
-<button id="joinBtn">Join Game</button>
+            <input id="username" placeholder="Enter username" style="width:100%;padding:10px;">
+            <button id="joinBtn">Join Game</button>
 
-</div>
+        </div>
 
 
-<div id="quizScreen" style="display:none">
+        <div id="quizScreen" style="display:none">
 
-<div id="timer">10</div>
+            <div id="timer">10</div>
 
-<h2 id="question"></h2>
+            <h2 id="question"></h2>
 
-<div id="options"></div>
+            <div id="options"></div>
 
-<button id="startBtn">Start Quiz</button>
+            <button id="startBtn">Start Quiz</button>
 
-</div>
+        </div>
 
 
-<div id="leaderboard" style="display:none">
+        <div id="leaderboard" style="display:none">
 
-<h2>Leaderboard</h2>
-<div id="scores"></div>
+            <h2>Leaderboard</h2>
+            <div id="scores"></div>
 
-</div>
+        </div>
 
-</div>
+    </div>
 
-<script>
+    <script>
 
-const socket = new WebSocket("ws://localhost:8080");
+        const socket = new WebSocket("ws://localhost:8080");
 
-let userId = Math.random().toString(36).substring(7);
+        let userId = Math.random().toString(36).substring(7);
 
-const usernameMap = {};
+        const usernameMap = {};
 
-const joinBtn = document.getElementById("joinBtn");
-const startBtn = document.getElementById("startBtn");
+        const joinBtn = document.getElementById("joinBtn");
+        const startBtn = document.getElementById("startBtn");
 
-const joinScreen = document.getElementById("joinScreen");
-const quizScreen = document.getElementById("quizScreen");
+        const joinScreen = document.getElementById("joinScreen");
+        const quizScreen = document.getElementById("quizScreen");
 
-const questionEl = document.getElementById("question");
-const optionsEl = document.getElementById("options");
-const timerEl = document.getElementById("timer");
+        const questionEl = document.getElementById("question");
+        const optionsEl = document.getElementById("options");
+        const timerEl = document.getElementById("timer");
 
-const leaderboard = document.getElementById("leaderboard");
-const scoresDiv = document.getElementById("scores");
+        const leaderboard = document.getElementById("leaderboard");
+        const scoresDiv = document.getElementById("scores");
 
 
-socket.onopen = () => {
-    console.log("Connected to server");
-};
+        socket.onopen = () => {
+            console.log("Connected to server");
+        };
 
 
-joinBtn.onclick = () => {
+        joinBtn.onclick = () => {
 
-    const username = document.getElementById("username").value;
+            document.querySelectorAll(".option").forEach(b => b.disabled = true);
 
-    if(username.length === 0) return;
+            const username = document.getElementById("username").value;
 
-    usernameMap[userId] = username;
+            if (username.length === 0) return;
 
-    socket.send(JSON.stringify({
-        type:"join",
-        userId:userId,
-        username:username
-    }));
+            usernameMap[userId] = username;
 
-    joinScreen.style.display="none";
-    quizScreen.style.display="block";
-};
+            socket.send(JSON.stringify({
+                type: "join",
+                userId: userId,
+                username: username
+            }));
 
+            joinScreen.style.display = "none";
+            quizScreen.style.display = "block";
+        };
 
-startBtn.onclick = () => {
 
-    socket.send(JSON.stringify({
-        type:"start"
-    }));
+        startBtn.onclick = () => {
 
-};
+            socket.send(JSON.stringify({
+                type: "start"
+            }));
 
+        };
 
-socket.onmessage = (event) => {
 
-    const data = JSON.parse(event.data);
+        socket.onmessage = (event) => {
 
-    console.log(data);
+            const data = JSON.parse(event.data);
 
-    if(data.type === "players"){
-        Object.assign(usernameMap, data.players);
-    }
+            console.log(data);
 
-    if(data.type === "question"){
+            if (data.type === "players") {
+                Object.assign(usernameMap, data.players);
+            }
 
-        questionEl.innerText = data.question;
+            if (data.type === "question") {
 
-        optionsEl.innerHTML="";
+                questionEl.innerText = data.question;
 
-        data.options.forEach((option,index)=>{
+                optionsEl.innerHTML = "";
 
-            const btn = document.createElement("button");
+                data.options.forEach((option, index) => {
 
-            btn.className="option";
+                    const btn = document.createElement("button");
 
-            btn.innerText=option;
+                    btn.className = "option";
 
-            btn.onclick=()=>{
+                    btn.innerText = option;
 
-                socket.send(JSON.stringify({
-                    type:"answer",
-                    userId:userId,
-                    answer:index
-                }));
+                    btn.onclick = () => {
 
-            };
+                        socket.send(JSON.stringify({
+                            type: "answer",
+                            userId: userId,
+                            answer: index
+                        }));
 
-            optionsEl.appendChild(btn);
+                    };
 
-        });
+                    optionsEl.appendChild(btn);
 
-    }
+                });
 
-    if(data.type === "timer"){
+            }
 
-        timerEl.innerText = "Time: " + data.value;
+            if (data.type === "timer") {
 
-    }
+                timerEl.innerText = "Time: " + data.value;
 
+            }
 
-    if(data.type === "end"){
 
-        quizScreen.style.display="none";
-        leaderboard.style.display="block";
+            if (data.type === "end") {
 
-        scoresDiv.innerHTML="";
+                quizScreen.style.display = "none";
+                leaderboard.style.display = "block";
 
-        /* Convert scores to array so we can sort */
-        const sorted = Object.entries(data.scores)
-            .sort((a,b)=> b[1]-a[1]);
+                scoresDiv.innerHTML = "";
 
-        sorted.forEach((player,index)=>{
+                /* Convert scores to array so we can sort */
+                const sorted = Object.entries(data.scores)
+                    .sort((a, b) => b[1] - a[1]);
 
-            const id = player[0];
-            const score = player[1];
+                sorted.forEach((player, index) => {
 
-            const username = usernameMap[id] || id;
+                    const id = player[0];
+                    const score = player[1];
 
-            const div = document.createElement("div");
+                    const username = usernameMap[id] || id;
 
-            div.className="player";
+                    const div = document.createElement("div");
 
-            div.innerHTML = `
-                <span class="rank">#${index+1}</span>
+                    div.className = "player";
+
+                    div.innerHTML = `
+                <span class="rank">#${index + 1}</span>
                 <span>${username}</span>
                 <span>${score}</span>
             `;
 
-            scoresDiv.appendChild(div);
+                    scoresDiv.appendChild(div);
 
-        });
-    }
+                });
+            }
 
-};
+            if (data.type === "leaderboard") {
 
-</script>
+                leaderboard.style.display = "block";
+                scoresDiv.innerHTML = "";
+
+                const sorted = Object.entries(data.scores)
+                    .sort((a, b) => b[1] - a[1]);
+
+                sorted.forEach((player, index) => {
+
+                    const div = document.createElement("div");
+                    div.className = "player";
+
+                    div.innerHTML = `
+            <span>#${index + 1}</span>
+            <span>${player[0]}</span>
+            <span>${player[1]}</span>
+        `;
+
+                    scoresDiv.appendChild(div);
+
+                });
+            }
+
+        };
+
+    </script>
 
 </body>
+
 </html>

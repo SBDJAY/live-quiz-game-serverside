@@ -1,12 +1,16 @@
-const mongoose = require('mongoose');
+const mongoose = require("mongoose");
 
 const scoreSchema = new mongoose.Schema({
-    username: String,
-    score: Number,
-    createdAt: {
-        type: Date,
-        default: Date.now
+    username:{
+        type:String,
+        required:true
+    },
+    score:{
+        type:Number,
+        required:true
     }
+},{
+    timestamps:true
 });
 
-module.exports = mongoose.models.Score || mongoose.model("Score", scoreSchema);
+module.exports = mongoose.model("Score",scoreSchema);

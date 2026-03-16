@@ -1,5 +1,3 @@
-
-
 const WebSocket = require('ws');
 const mongoose = require('mongoose');
 
@@ -7,40 +5,49 @@ const Question = require('./questionModel');
 const Score = require('./scoreModel');
 
 mongoose.connect("mongodb://127.0.0.1:27017/quizgame")
-.then(()=>console.log("MongoDB Connected"))
-.catch(err=>console.log(err));
+    .then(() => console.log("MongoDB Connected"))
+    .catch(err => console.log(err));
+
 
 const wss = new WebSocket.Server({ port: 8080 });
+
+process.on('uncaughtException', err => {
+    console.error("Server Error:", err);
+});
+
+let questionAnswered = false;
 
 let clients = [];
 let players = {};
 let scores = {};
 
+let persistentLeaderboard = {};
+
 let questions = [];
 let currentQuestion = 0;
 let timer;
 
-async function loadQuestions(){
+async function loadQuestions() {
 
     questions = await Question.find();
 
-    if(questions.length === 0){
+    if (questions.length === 0) {
 
         await Question.insertMany([
             {
-                question:"What is the capital of France?",
-                options:["Berlin","Madrid","Paris","Rome"],
-                answer:2
+                question: "What is the capital of France?",
+                options: ["Berlin", "Madrid", "Paris", "Rome"],
+                answer: 2
             },
             {
-                question:"Which planet is the Red Planet?",
-                options:["Earth","Mars","Jupiter","Venus"],
-                answer:1
+                question: "Which planet is the Red Planet?",
+                options: ["Earth", "Mars", "Jupiter", "Venus"],
+                answer: 1
             },
             {
-                question:"Largest mammal?",
-                options:["Elephant","Blue Whale","Shark","Horse"],
-                answer:1
+                question: "Largest mammal?",
+                options: ["Elephant", "Blue Whale", "Shark", "Horse"],
+                answer: 1
             }
         ]);
 
@@ -48,123 +55,177 @@ async function loadQuestions(){
     }
 }
 
-loadQuestions();
+async function loadLeaderboard() {
 
-function broadcast(data){
-    clients.forEach(client=>{
-        if(client.readyState === WebSocket.OPEN){
+    const allScores = await Score.find();
+
+    allScores.forEach(s => {
+
+        if (!persistentLeaderboard[s.username]) {
+            persistentLeaderboard[s.username] = 0;
+        }
+
+        persistentLeaderboard[s.username] += s.score;
+    });
+
+    console.log("Leaderboard loaded:", persistentLeaderboard);
+}
+
+loadQuestions();
+loadLeaderboard();
+
+function broadcast(data) {
+    clients.forEach(client => {
+        if (client.readyState === WebSocket.OPEN) {
             client.send(JSON.stringify(data));
         }
     });
 }
 
-function sendQuestion(){
+function sendQuestion() {
 
-    if(currentQuestion >= questions.length){
+    if (currentQuestion >= questions.length) {
         endGame();
         return;
     }
 
+    questionAnswered = false; // reset lock
+
     const q = questions[currentQuestion];
 
     broadcast({
-        type:"question",
-        question:q.question,
-        options:q.options
+        type: "question",
+        question: q.question,
+        options: q.options
     });
 
     startTimer();
 }
 
-function startTimer(){
+function startTimer() {
 
     let timeLeft = 10;
 
-    broadcast({ type:"timer", value:timeLeft });
+    broadcast({ type: "timer", value: timeLeft });
 
-    timer = setInterval(()=>{
+    timer = setInterval(() => {
 
         timeLeft--;
 
-        broadcast({ type:"timer", value:timeLeft });
+        broadcast({ type: "timer", value: timeLeft });
 
-        if(timeLeft <= 0){
+        if (timeLeft <= 0) {
             clearInterval(timer);
             nextQuestion();
         }
 
-    },1000);
+    }, 1000);
 }
 
-function nextQuestion(){
+function nextQuestion() {
 
     currentQuestion++;
     sendQuestion();
 }
 
-async function endGame(){
+async function endGame() {
 
-    broadcast({
-        type:"end",
-        scores:scores
-    });
+    // Save scores
+    for (const id in scores) {
 
-    for(const id in scores){
+        const username = players[id];
+
+        const safeScore = Number(scores[id]) || 0;
 
         const score = new Score({
-            username:players[id],
-            score:scores[id]
+            username: username,
+            score: safeScore
         });
 
         await score.save();
+
+        if (!persistentLeaderboard[username]) {
+            persistentLeaderboard[username] = 0;
+        }
+
+        persistentLeaderboard[username] += scores[id];
     }
+
+    broadcast({
+        type: "end",
+        scores: persistentLeaderboard
+    });
+
 }
 
-wss.on('connection',(ws)=>{
+wss.on('connection', (ws) => {
 
     console.log("Client connected");
 
     clients.push(ws);
 
-    ws.on('message',(message)=>{
+    // send existing leaderboard immediately
+    ws.send(JSON.stringify({
+        type: "leaderboard",
+        scores: persistentLeaderboard
+    }));
+
+    ws.on('message', (message) => {
 
         const data = JSON.parse(message.toString());
 
-        // JOIN
-        if(data.type === "join"){
+        if (data.type === "join") {
 
             players[data.userId] = data.username;
-            scores[data.userId] = 0;
+
+            if (scores[data.userId] === undefined) {
+                scores[data.userId] = 0;
+            }
         }
 
-        // START
-        if(data.type === "start"){
+        if (data.type === "start") {
 
             currentQuestion = 0;
+            scores = {};
+
+            for (const id in players) {
+                scores[id] = 0;
+            }
             sendQuestion();
         }
 
-        // ANSWER
-        if(data.type === "answer"){
+        if (data.type === "answer") {
+
+            if (questionAnswered) return;
 
             const q = questions[currentQuestion];
 
-            if(q && data.answer === q.answer){
+            if (!q) return;
 
-                scores[data.userId]++;
+            if (scores[data.userId] === undefined) {
+                scores[data.userId] = 0;
             }
 
-            // 🔥 NEW BEHAVIOR:
-            // Immediately move to next question
+            if (data.answer === q.answer) {
+                scores[data.userId] += 1;
+            }
+
+            questionAnswered = true;
+
             clearInterval(timer);
-            nextQuestion();
+
+            setTimeout(() => {
+                nextQuestion();
+            }, 500);
+
         }
 
     });
 
-    ws.on('close',()=>{
+    ws.on('close', () => {
 
         clients = clients.filter(c => c !== ws);
+
     });
 
 });
